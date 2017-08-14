@@ -73,7 +73,7 @@ public:
 private:
 	AVStream *AddVideoStream();
 	AVFrame *Decode(AVPacket *packet);
-	void WrapEncodedBuffer(AVPacket *pkt, uint8_t *data, int size, bool is_key_frame, int64_t timestamp = 0);
+	void WrapEncodedBuffer(AVPacket *pkt, uint8_t *data, int size, int64_t timestamp = 0);
 	std::string dst_;
 	int height_, width_, fps_;
 	AVFormatContext *ofmt_ctx_;
@@ -128,7 +128,7 @@ bool H264MpegtsStreamer::StreamEncodedData(uint8_t *data, int size, int64_t time
 	uint8_t *buffer = data;
 	int buffer_size = size;
 	bool buffer_copied = false;
-	if (!es_header_sent_) {
+	if (!es_header_sent_ && !es_header_.empty()) {
 		buffer_size = es_header_.size() + size;
 		buffer = new uint8_t[buffer_size];
 		std::copy(es_header_.begin(), es_header_.end(), buffer);
@@ -193,8 +193,7 @@ bool H264MpegtsStreamer::StreamReencodeData(uint8_t *data, int size, int64_t tim
 }
 
 AVStream* H264MpegtsStreamer::AddVideoStream() {
-	AVCodec *codec = avcodec_find_encoder(AV_CODEC_ID_H264);
-	AVStream *st = avformat_new_stream(ofmt_ctx_, codec);
+	AVStream *st = avformat_new_stream(ofmt_ctx_, NULL);
 	st->codecpar->codec_id = AV_CODEC_ID_H264;
 	st->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
 	st->codecpar->bit_rate = kBitRate;
@@ -208,7 +207,7 @@ AVStream* H264MpegtsStreamer::AddVideoStream() {
 	return st;
 }
 
-void H264MpegtsStreamer::WrapEncodedBuffer(AVPacket *pkt, uint8_t *data, int size, bool is_key_frame, int64_t timestamp) {
+void H264MpegtsStreamer::WrapEncodedBuffer(AVPacket *pkt, uint8_t *data, int size, int64_t timestamp) {
 	av_init_packet(pkt);
 	pkt->flags |= (IsKeyFrame(data, size))?AV_PKT_FLAG_KEY:0;
 	//pkt->flags |= (is_key_frame)?AV_PKT_FLAG_KEY:0;
@@ -216,6 +215,7 @@ void H264MpegtsStreamer::WrapEncodedBuffer(AVPacket *pkt, uint8_t *data, int siz
 	pkt->data = data;
 	pkt->size = size;
 	pkt->dts = AV_NOPTS_VALUE;
+	//pkt->pts = AV_NOPTS_VALUE;
 	pkt->pts = av_rescale_q(timestamp, (AVRational){1, 1000000}, ostream_->time_base);
 }
 
